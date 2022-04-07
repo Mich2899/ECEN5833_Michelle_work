@@ -39,12 +39,12 @@ void I2CInit()
 {
 
   init.port       = I2C0;
-  init.sclPort    = gpioPortD;
-  init.sclPin     = 11;
-  init.sdaPort    = gpioPortD;
-  init.sdaPin     = 10;
-  init.portLocationScl = 18;
-  init.portLocationSda = 18;
+  init.sclPort    = gpioPortC;
+  init.sclPin     = 10;
+  init.sdaPort    = gpioPortC;
+  init.sdaPin     = 11;
+  init.portLocationScl = 14;
+  init.portLocationSda = 16;
   init.i2cRefFreq = 0;
   init.i2cMaxFreq = I2C_FREQ_STANDARD_MAX;
   init.i2cClhr    = i2cClockHLRStandard;
