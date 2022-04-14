@@ -10,7 +10,7 @@
 #include "scheduler.h"
 
 enum States{CONFIG, WAIT_SD, START_CONV, WAIT_OS_I2C, MEASURE, REPORT,
-            CONFIG_ADDR_BNO, DOUBLE_CHECK_BNO055, WAIT_10MS, SET_MODE_BNO055, RESET_BNO055, WAIT_1S, LOOP_CHECK_BNO055, WAIT_10MS_LOOP, WAIT_50MS, BNO055_NPOWER, WAIT_10MS_NPOWER, BNO055_CLEARPAGE, BNO055_TRIG_STATE, WAIT_1S_READXYZ, BNO055_OPRMODE, BNO055_READXYZ, BNO055_READRPY, ERROR};
+            CONFIG_ADDR_BNO, DOUBLE_CHECK_BNO055, WAIT_10MS, SET_MODE_BNO055, RESET_BNO055, WAIT_1S, LOOP_CHECK_BNO055, WAIT_10MS_LOOP, WAIT_50MS, BNO055_NPOWER, WAIT_10MS_NPOWER, BNO055_CLEARPAGE, BNO055_TRIG_STATE, WAIT_1S_READXYZ, BNO055_OPRMODE, BNO055_READXYZ, WAIT_500MS_READRPY, BNO055_READRPY, ERROR};
 enum Events{evtNone, evtLETIMER0_UF, evtLETIMER0_COMP1, evtI2C0_Complete};
 
 enum Events currentevt = evtNone;
@@ -29,6 +29,7 @@ uint8_t BNO055_READ_RPY[2] = {BNO055_CALIB_STAT_ADDR,0};
 
 void getVector();
 void getCalibration();
+void getfinalValues();
 
 bool check_bno(){
   if(BNO055_DEVICE_CHECK[1] != BNO055_ID)
@@ -134,10 +135,12 @@ void app_process_action()
 //            reportTemperatureTMP117();
 //          }
 //        break;
+
+    /*Set in configuration mode by sending device address*/
       case CONFIG_ADDR_BNO:
               if(evt == evtLETIMER0_UF){
                   currentste = DOUBLE_CHECK_BNO055;
-                  printf("CONFIG_ADDR_BNO\n\r");
+                  //printf("CONFIG_ADDR_BNO\n\r");
                   //sl_power_manager_add_em_requirement(SL_POWER_MANAGER_EM1);
 
                   /********************************Make sure you have right device***********************************/
@@ -148,9 +151,10 @@ void app_process_action()
               }
         break;
 
+     /*Keep checking until the device responds to the correct address*/
       case DOUBLE_CHECK_BNO055:
               if(evt == evtI2C0_Complete){
-                  printf("DOUBLE_CHECK_BNO055\n\r");
+                  //printf("DOUBLE_CHECK_BNO055\n\r");
                   /* Disable IRQ on successful transfer */
                   I2CTransferReturnStatus = getI2CTransferReturn();
                   if(I2CTransferReturnStatus == i2cTransferDone)
@@ -180,10 +184,11 @@ void app_process_action()
 
         break;
 
+      /*10ms wait between each check*/
       case WAIT_10MS:
                   if(evt == evtLETIMER0_COMP1){
                       currentste = DOUBLE_CHECK_BNO055;
-                       printf("WAIT_10MS\n\r");
+                       //printf("WAIT_10MS\n\r");
                        //sl_power_manager_add_em_requirement(SL_POWER_MANAGER_EM1);
 
                        /********************************Make sure you have right device***********************************/
@@ -194,10 +199,11 @@ void app_process_action()
                   }
         break;
 
+      /*set command sent, check for next command*/
       case SET_MODE_BNO055:
               if(evt == evtI2C0_Complete){
                   currentste=RESET_BNO055;
-                  printf("SET_MODE_BNO055\n\r");
+                  //printf("SET_MODE_BNO055\n\r");
                   /* Disable IRQ on successful transfer */
                   I2CTransferReturnStatus = getI2CTransferReturn();
                   if(I2CTransferReturnStatus == i2cTransferDone)
@@ -211,10 +217,11 @@ void app_process_action()
               }
         break;
 
+      /*reset command sent, wait for 1.5seconds*/
       case RESET_BNO055:
                 if(evt == evtI2C0_Complete){
-                    currentste=RESET_BNO055;
-                    printf("RESET_BNO055\n\r");
+                    currentste=WAIT_1S;
+                    //printf("RESET_BNO055\n\r");
                     /* Disable IRQ on successful transfer */
                     I2CTransferReturnStatus = getI2CTransferReturn();
                     if(I2CTransferReturnStatus == i2cTransferDone)
@@ -225,9 +232,11 @@ void app_process_action()
 
         break;
 
+      /*send a device check*/
       case WAIT_1S:
                   if(evt == evtLETIMER0_COMP1){
                       currentste=LOOP_CHECK_BNO055;
+                      //printf("WAIT_1S\n\r");
                   /*******CHECK FOR DEVICE ID***************/
                   ret_status = I2CTransferInitWrapper(BNO055_DEVICE_ADDRESS, &BNO055_DEVICE_CHECK[0], I2C_FLAG_WRITE_READ,
                                                                      1, 1);
@@ -236,9 +245,10 @@ void app_process_action()
                   }
         break;
 
+      /*keep checking in a loop until receive a correct(0x00) response*/
       case LOOP_CHECK_BNO055:
                   if(evt == evtI2C0_Complete){
-                      printf("LOOP_CHECK_BNO055\n\r");
+                      //printf("LOOP_CHECK_BNO055\n\r");
                       /* Disable IRQ on successful transfer */
                       I2CTransferReturnStatus = getI2CTransferReturn();
                       if(I2CTransferReturnStatus == i2cTransferDone)
@@ -255,15 +265,19 @@ void app_process_action()
                   }
         break;
 
+      /*wait 10ms between each check*/
       case WAIT_10MS_LOOP:
                   if(evt == evtLETIMER0_COMP1){
                       currentste=LOOP_CHECK_BNO055;
+                      //printf("WAIT_10MS_LOOP\n\r");
                   }
         break;
 
+      /*wait 50ms before sending power setting command*/
       case WAIT_50MS:
                  if(evt == evtLETIMER0_COMP1){
                        currentste=BNO055_NPOWER;
+                       //printf("WAIT_50MS\n\r");
                       /* Send the normal power mode command */
                         ret_status = I2CTransferInitWrapper(BNO055_DEVICE_ADDRESS, &BNO055_NORMAL_POWER[0], I2C_FLAG_WRITE,
                                                                     sizeof(BNO055_NORMAL_POWER)/sizeof(uint8_t), 0);
@@ -273,12 +287,12 @@ void app_process_action()
         break;
 
 
-
+      /*power set command sent, wait for 10ms*/
       case BNO055_NPOWER:
                     if(evt == evtI2C0_Complete){
 
                         currentste = WAIT_10MS_NPOWER;
-                        printf("BNO055_NPOWER\n\r");
+                        //printf("BNO055_NPOWER\n\r");
                         /* Disable IRQ on successful transfer */
                         I2CTransferReturnStatus = getI2CTransferReturn();
                         if(I2CTransferReturnStatus == i2cTransferDone)
@@ -289,10 +303,12 @@ void app_process_action()
                     }
         break;
 
+      /*send a clear page command*/
       case WAIT_10MS_NPOWER:
                     if(evt == evtLETIMER0_COMP1){
 
                         currentste=BNO055_CLEARPAGE;
+                        //printf("WAIT_10MS_NPOWER\n\r");
                         /* Send the clear page command*/
                           ret_status = I2CTransferInitWrapper(BNO055_DEVICE_ADDRESS, &BNO055_CLEAR_PAGE[0], I2C_FLAG_WRITE,
                                                                       sizeof(BNO055_CLEAR_PAGE)/sizeof(uint8_t), 0);
@@ -301,11 +317,13 @@ void app_process_action()
                     }
         break;
 
+      /*send a trig command*/
       case BNO055_CLEARPAGE:
 
                     if(evt == evtI2C0_Complete){
 
                         currentste=BNO055_TRIG_STATE;
+                        //printf("BNO055_CLEARPAGE\n\r");
                         /* Disable IRQ on successful transfer */
                         I2CTransferReturnStatus = getI2CTransferReturn();
                         if(I2CTransferReturnStatus == i2cTransferDone)
@@ -319,10 +337,12 @@ void app_process_action()
                     }
         break;
 
+      /*trig command sent, now send a command to set the operating mode*/
       case BNO055_TRIG_STATE:
                     if(evt == evtI2C0_Complete){
 
                         currentste=BNO055_OPRMODE;
+                        //printf("BNO055_TRIG_STATE\n\r");
                         /* Disable IRQ on successful transfer */
                         I2CTransferReturnStatus = getI2CTransferReturn();
                         if(I2CTransferReturnStatus == i2cTransferDone)
@@ -336,28 +356,27 @@ void app_process_action()
                     }
         break;
 
+      /*wait for 1s for device to set the operating mode*/
       case BNO055_OPRMODE:
                     if(evt == evtI2C0_Complete){
 
                         currentste=WAIT_1S_READXYZ;
-                        printf("BNO055_OPRMODE\n\r");
+                        //printf("BNO055_OPRMODE\n\r");
                         /* Disable IRQ on successful transfer */
                         I2CTransferReturnStatus = getI2CTransferReturn();
                         if(I2CTransferReturnStatus == i2cTransferDone)
                           NVIC_DisableIRQ(I2C0_IRQn);
 
-                        if(flag>0){
-                            getCalibration();
-                        }
-
-                        timerWaitUs_irq(1000*1000);
+                        timerWaitUs_irq((1000)*1000);
 
                     }
         break;
 
+      /*after waiting for 1 sec now send the read command for xyz data*/
       case WAIT_1S_READXYZ:
 
                     if(evt == evtLETIMER0_COMP1){
+                        //printf("WAIT_1S_READXYZ\n\r");
                         currentste=BNO055_READXYZ;
                         /*read vector data(6 bytes)*/
                         ret_status = I2CTransferInitWrapper(BNO055_DEVICE_ADDRESS, &BNO055_READ_XYZ[0], I2C_FLAG_WRITE_READ,
@@ -368,46 +387,54 @@ void app_process_action()
 
         break;
 
+      /*store the xyz data and wait for 1ms before reading RPY data*/
       case BNO055_READXYZ:
                     if(evt == evtI2C0_Complete){
 
-                        currentste=BNO055_OPRMODE;
+                        currentste=WAIT_500MS_READRPY;
 
-                        printf("BNO055_READXYZ\n\r");
+                        //printf("BNO055_READXYZ\n\r");
                         /* Disable IRQ on successful transfer */
                         I2CTransferReturnStatus = getI2CTransferReturn();
                         if(I2CTransferReturnStatus == i2cTransferDone)
                           NVIC_DisableIRQ(I2C0_IRQn);
 
-                        getVector();
-                        ret_status = I2CTransferInitWrapper(BNO055_DEVICE_ADDRESS, &BNO055_READ_RPY[0], I2C_FLAG_WRITE_READ,
-                                                                          1, 1);
-                              if(ret_status)
-                                  return;
-                        flag++;
+                        timerWaitUs_irq(1000);
+
                     }
         break;
 
+      /*send read command for rpy data*/
+      case WAIT_500MS_READRPY:
+                  if(evt == evtLETIMER0_COMP1){
+
+                      currentste = BNO055_READRPY;
+                      //printf("WAIT_500MS_READRPY\n\r");
+                      ret_status = I2CTransferInitWrapper(BNO055_DEVICE_ADDRESS, &BNO055_READ_RPY[0], I2C_FLAG_WRITE_READ,
+                                                                        1, 1);
+                            if(ret_status)
+                                return;
+                  }
+
+        break;
+
+      /*display values, wait for 70ms before reading another set of values*/
       case BNO055_READRPY:
                     if(evt == evtI2C0_Complete){
-                        printf("BNO055_READRPY\n\r");
+                        currentste=WAIT_1S_READXYZ;
+                        //printf("BNO055_READRPY\n\r");
                         /* Disable IRQ on successful transfer */
                         I2CTransferReturnStatus = getI2CTransferReturn();
                         if(I2CTransferReturnStatus == i2cTransferDone)
                           NVIC_DisableIRQ(I2C0_IRQn);
 
-                        getCalibration();
-                        timerWaitUs_polled((1000)*1000);
-                        ret_status = I2CTransferInitWrapper(BNO055_DEVICE_ADDRESS, &BNO055_READ_XYZ[0], I2C_FLAG_WRITE_READ,
-                                                                        1, 6);
-                        if(ret_status)
-                           return;
-                          currentste=BNO055_READXYZ;
+                        getfinalValues();
+                        timerWaitUs_irq((70)*1000);
                     }
         break;
 
       case ERROR:
-          printf("Error state!!!\n\r");
+          //printf("Error state!!!\n\r");
         break;
   }
 
@@ -448,7 +475,7 @@ void getVector(){
       arr[1] = ((double)y)/16.0;
       arr[2] = ((double)z)/16.0;
 
-      printf("X=%lf Y=%lf Z=%lf\n\r",arr[0],arr[1],arr[2]);
+      printf("X=%lf Y=%lf Z=%lf ",arr[0],arr[1],arr[2]);
 }
 
 void getCalibration(){
@@ -467,4 +494,47 @@ void getCalibration(){
     mag = BNO055_READ_RPY[1] & 0x03;
 
     printf("gyro=%d accel=%d mag=%d\n\r",gyro,accel,mag);
+}
+
+void getfinalValues(){
+  double arr[3];
+
+      int16_t x,y,z;
+      x=y=z=0;
+      uint8_t  gyro=0, accel=0, mag=0;
+
+  //    /*read vector data(6 bytes)*/
+  //    uint8_t ret_status = I2CTransferInitWrapper(BNO055_DEVICE_ADDRESS, &BNO055_READ_XYZ, I2C_FLAG_WRITE_READ,
+  //                                                  1, 6);
+  //      if(ret_status)
+  //          return;
+
+        x = ((int16_t)BNO055_READ_XYZ[1]) | (((int16_t)BNO055_READ_XYZ[2]) << 8);
+        y = ((int16_t)BNO055_READ_XYZ[3]) | (((int16_t)BNO055_READ_XYZ[4]) << 8);
+        z = ((int16_t)BNO055_READ_XYZ[5]) | (((int16_t)BNO055_READ_XYZ[6]) << 8);
+
+        arr[0] = ((double)x)/16.0;
+        arr[1] = ((double)y)/16.0;
+        arr[2] = ((double)z)/16.0;
+
+  //  /*read calibration data(6 bytes)*/
+  //  uint8_t ret_status = I2CTransferInitWrapper(BNO055_DEVICE_ADDRESS, &BNO055_READ_RPY[0], I2C_FLAG_WRITE_READ,
+  //                                                1, 1);
+  //    if(ret_status)
+  //        return;
+
+      //system = ((BNO055_READ_RPY[1])>>6) & 0x03;
+      gyro = ((BNO055_READ_RPY[1])>>4) & 0x03;
+      accel = ((BNO055_READ_RPY[1])>>2) & 0x03;
+      mag = BNO055_READ_RPY[1] & 0x03;
+
+      BNO055_READ_XYZ[1] = 0;
+      BNO055_READ_XYZ[2] = 0;
+      BNO055_READ_XYZ[3] = 0;
+      BNO055_READ_XYZ[4] = 0;
+      BNO055_READ_XYZ[5] = 0;
+      BNO055_READ_XYZ[6] = 0;
+      BNO055_READ_RPY[1] = 0;
+
+      printf("X=%lf Y=%lf Z=%lf gyro=%d accel=%d mag=%d\n\r",arr[0],arr[1],arr[2], gyro,accel,mag);
 }
